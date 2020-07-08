@@ -1,0 +1,122 @@
+EXECUTE-DEC
+# mem[0] - mem[6] is the stack
+# mem[7] is just wasted cuz i maybe
+#     derped pop a bit, but also
+#     is a constant 0
+# mem[8] is the stack pointer, it
+#     stores adress of the first
+#     empty stack word(byte)
+# mem[9] is reserved to pass arguments 
+#     to simple functions, no stack
+# mem[10] stores the return adress for
+#     pop function
+# mem[11], mem[12], mem[14] are used by pop
+# mem[13] stores a constant 255
+# mem[15] is reserved for
+#     whatever other needs
+#
+# push pushes x onto a stack,
+#     sets x to 1:
+#     o8 S1 i8
+# pop (x = mem[mem[8]-1-x],
+#     removes mem[mem[8]-1-x]):
+#     O11 S{"G12" adress} O10 S0 B4 G12
+#
+# mem[16], mem[17] are PROD inputs
+# PROD uses mem[18] internally and as an output
+#
+# mem[19], mem[20], mem[21] are used by COMPARE
+# if mem[20] >= mem[19], then mem[21] is set 1, 0 otherwise
+#
+# mem[22] - mem[24] belong to DIVMOD
+# mem[22]/mem[23] = mem[24] + mem[22]'/mem[23]
+#
+# mem[25] and mem[26] are used by PRIME
+# mem[26] is 1 if mem[25] is prime and is 0 otherwise
+	
+	[13:highC]
+	
+	S255 O[highC]                                          # inits mem[13] to 255
+	S0 B{:0}                                               # jump to MAIN
+	
+	
+	
+{POP:3}
+	G11                                                    # grabs x back
+	s[highC]                                               # x = 256 - x - 1
+	A8                                                     # x = mem[8]-1-x
+	O11                                                    # mem[11] = mem[8]-1-x
+	g11                                                    # x = mem[mem[8]-1-x]
+	O12                                                    # mem[12] = mem[mem[8]-1-x]
+	S255 i8                                                # decrement the stack counter
+{POP_LOOP:4}
+	G11 O14                                                # mem[14] = mem[11]
+	S1 i11                                                 # mem[11] += 1
+	g11 o14                                                # mem[mem[14]] = mem[mem[11]]
+	G11 I249                                               # x = mem[11] - 7
+	b10                                                    # return if x == 0
+	S0 B{:4}                                               # jump to POP_LOOP
+	
+	
+	
+{COMPARE:5}
+	G19 B{:6}                                              # jump to CP_LABEL if mem[19] is 0
+	G20 B{:7}                                              # jump to CP_LABEL2 if mem[20] is 0
+	S255 i19 i20                                           # decrement mem[19] and mem[20]
+	S0 B{:5}                                               # jump to COMPARE
+{CP_LABEL:6}
+	S1                                                     # x = 1
+{CP_LABEL2:7}
+	O21                                                    # sets mem[21] to 1 if jumped to CP_LABEL, else 0
+	S0 O11 S{:15} O10 S0 B{:3} {-:15}b12                   # return from subroutine
+	
+	
+	
+{DIVMOD:8}
+	O24                                                    # init mem[24] to 0
+{DIVMOD_LOOP:9}
+	G22 I1 O19                                             # mem[19] = mem[22]+1
+	G23 O20                                                # mem[20] = mem[23]
+	S{:18} o8 S1 i8                                        # push return adress onto a stack
+	S0 B{:5}                                               # jump to subroutine COMPARE; mem[21] = 1 if mem[22] < mem[23] else 0
+	{-:18}S255 i21 G21 B{:10}                              # jump to DIVMOD_BRK if mem[22] < mem[23]
+	G23 s[highC] I1 i22                                    # mem[22] -= mem[23]
+	S1 i24                                                 # mem[24] += 1
+	S0 B{:9}                                               # jump to DIVMOD_LOOP
+{DIVMOD_BRK:10}
+	S0 O11 S{:16} O10 S0 B{:3} {-:16}b12                   # return from subroutine
+	
+	
+	
+{PRIME:11}
+	G25 B{:14} I255 B{:14}                                 # jump to PRIME_BRK if mem[2] is 0 or 1
+	S2 O26                                                 # init mem[26] at 2
+{PRIME_LOOP:12}
+	G26 s[highC] I1 A25 B{:999}                            # jump to PRIME_LABEL if mem[25] == mem[26]
+	G25 O22                                                # mem[19] = mem[22]
+	G26 O23                                                # mem[20] = mem[23]
+	S{:19} o8 S1 i8                                        # push return adress onto a stack
+	S0 B{:8}                                               # jump to subroutine DIVMOD
+	{-:19}G22 B{:14}                                       # jump to PRIME_BRK if mem[25]%mem[26] == 0
+	S1 i26                                                 # increment mem[26]
+	S0 B{:12}                                              # jump to PRIME_LOOP
+{PRIME_LABEL:999}
+	S1                                                     # x = 1
+{PRIME_BRK:14}
+	O26                                                    # mem[26] = 1 if prime, 0 if not
+	S0 O11 S{:17} O10 S0 B{:3} {-:17}b12                   # return from subroutine
+	
+	
+	
+{MAIN:0}
+	S2 O25                                                 # init mem[25] at 2
+{MAIN_LOOP:1}
+	S{:20} o8 S1 i8                                        # push return adress onto a stack
+	S0 B{:11}                                              # jump to subroutine PRIME
+	{-:20}G25 I1 O25                                       # increment mem[25]
+	B{:2}                                                  # jump to MAIN_BRK if mem[25] == 0
+	G26 B{:1}                                              # jump to MAIN_LOOP if not prime
+	G25 I255 T                                             # print out mem[25]-1, proven to be a prime
+	S0 B{:1}                                               # jump to MAIN_LOOP
+{MAIN_BRK:2}
+	#B{:2}                                                 # jump to itself. Infinite loop to keep console open
